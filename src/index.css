@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light; /* Forzamos luz para que se vea crema, no negro */
+}
+
+body {
+  background-color: #F0EEE9; /* Color base Cloud Dancer */
+  color: #2d2d2d;
+  margin: 0;
+}
+
+/* EL MEGA DEGRADADO (MAPA DE EMOCIONES)
+   Imagina un cuadrado gigante dividido en 4 zonas:
+   [ Crema (Neutro)  |  Rosa (Amor)   ]
+   [ Rojo (Ira)      |  Azul (Tristeza) ]
+*/
+.state-mega-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  
+  /* Pintamos las 4 esquinas */
+  background: 
+    radial-gradient(circle at 0% 0%, #F0EEE9 0%, transparent 55%),      /* Neutro (Arriba-Izq) */
+    radial-gradient(circle at 100% 0%, #ffc3a0 0%, transparent 50%),     /* Amor (Arriba-Der) */
+    radial-gradient(circle at 0% 100%, #850808 0%, transparent 50%),     /* Ira (Abajo-Izq) */
+    radial-gradient(circle at 100% 100%, #2c3e50 0%, transparent 60%),   /* Tristeza (Abajo-Der) */
+    
+    /* Un fondo base para conectar todo suavemente */
+    linear-gradient(135deg, #F0EEE9 0%, #fad0c4 50%, #bdc3c7 100%);
+    
+  background-size: 200% 200%; /* IMPORTANTE: Debe ser 200% para poder hacer zoom/pan */
+  
+  /* Animación sutil de "respiración" para que siempre esté vivo */
+  animation: breathe 10s ease-in-out infinite alternate;
+}
+
+@keyframes breathe {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.05); }
+}
