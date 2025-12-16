@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import html2canvas from 'html2canvas'; // Librería de fotos
 import TextEditor from './components/TextEditor';
 import Sidebar from './components/Sidebar';
 
-// DEFINICIÓN DE UN ESCRITO
+// Definición de tipos para el guardado
 export interface SavedWriting {
   id: string;
   title: string;
@@ -11,7 +12,7 @@ export interface SavedWriting {
   emotion: string;
 }
 
-// DICCIONARIO DE EMOCIONES (Rápido - 60 caracteres)
+// 1. DICCIONARIO EMOCIONAL (Rápido)
 const detectEmotion = (text: string) => {
   const recentText = text.slice(-60).toLowerCase(); 
   if (recentText.match(/ira|furia|odio|rabia|fuego|sangre|grito|ardor|guerra|golpe|infierno|maldit|quemar|destruir|matar|enemigo|colera|volcán|ceniza/)) return 'ira';
@@ -20,7 +21,7 @@ const detectEmotion = (text: string) => {
   return 'neutral';
 };
 
-// LINKS DE AUDIO
+// 2. AUDIOS (Recuerda poner tus propios links si estos caducan)
 const audioTracks = {
   neutral: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
   ira: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3',
@@ -32,24 +33,54 @@ function App() {
   const [text, setText] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
-  // ESTADO DE LA BIBLIOTECA (Carga desde LocalStorage al iniciar)
+  // Referencia para la "Cámara"
+  const captureRef = useRef<HTMLDivElement>(null);
+
+  // Carga de Biblioteca
   const [savedWritings, setSavedWritings] = useState<SavedWriting[]>(() => {
     const saved = localStorage.getItem('cromaverso_library');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // ESTADOS DE AUDIO
   const [isMuted, setIsMuted] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-
   const currentEmotion = detectEmotion(text);
 
-  // --- FUNCIONES DE LA BIBLIOTECA ---
+  // --- FUNCIÓN FOTOGRÁFICA DE ALTA CALIDAD ---
+  const handleDownloadImage = async () => {
+    if (!captureRef.current) return;
+    
+    // Ocultar placeholder temporalmente
+    const textarea = document.querySelector('textarea');
+    const originalPlaceholder = textarea?.placeholder;
+    if (textarea) textarea.placeholder = "";
+
+    try {
+      const canvas = await html2canvas(captureRef.current, {
+        useCORS: true,
+        scale: 4, // <--- AQUÍ ESTÁ EL CAMBIO: Calidad Ultra HD (4x)
+        backgroundColor: null, // Mantiene transparencias si las hay
+        logging: false
+      });
+
+      // Descarga automática
+      const link = document.createElement('a');
+      link.download = `CromaVerso-${currentEmotion}-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png', 1.0); // Calidad máxima 1.0
+      link.click();
+    } catch (error) {
+      console.error("Error al capturar:", error);
+      alert("Error al generar la imagen. Intenta de nuevo.");
+    } finally {
+      // Restaurar placeholder
+      if (textarea && originalPlaceholder) textarea.placeholder = originalPlaceholder;
+    }
+  };
+  // ---------------------------------------------
 
   const handleSave = () => {
-    if (!text.trim()) return alert("El lienzo está vacío. Escribe algo primero.");
-    
-    const title = prompt("¿Qué título le pondrás a esta obra?") || "Sin título";
+    if (!text.trim()) return alert("El lienzo está vacío.");
+    const title = prompt("¿Título de la obra?") || "Sin título";
     const newWriting: SavedWriting = {
       id: Date.now().toString(),
       title,
@@ -57,46 +88,38 @@ function App() {
       date: new Date().toLocaleDateString(),
       emotion: currentEmotion
     };
-
-    const updatedLibrary = [newWriting, ...savedWritings];
-    setSavedWritings(updatedLibrary);
-    localStorage.setItem('cromaverso_library', JSON.stringify(updatedLibrary));
-    alert("¡Guardado en tu biblioteca!");
+    const updated = [newWriting, ...savedWritings];
+    setSavedWritings(updated);
+    localStorage.setItem('cromaverso_library', JSON.stringify(updated));
   };
 
-  const handleLoad = (writing: SavedWriting) => {
-    if (text.length > 10) {
-      if (!window.confirm("¿Reemplazar tu texto actual? Asegúrate de haber guardado.")) return;
-    }
-    setText(writing.content);
+  const handleLoad = (w: SavedWriting) => {
+    if (text.length > 10 && !window.confirm("¿Reemplazar actual?")) return;
+    setText(w.content);
   };
 
   const handleDelete = (id: string) => {
-    if (!window.confirm("¿Seguro que quieres borrar esta obra?")) return;
-    const updatedLibrary = savedWritings.filter(w => w.id !== id);
-    setSavedWritings(updatedLibrary);
-    localStorage.setItem('cromaverso_library', JSON.stringify(updatedLibrary));
+    if (!window.confirm("¿Borrar permanentemente?")) return;
+    const updated = savedWritings.filter(w => w.id !== id);
+    setSavedWritings(updated);
+    localStorage.setItem('cromaverso_library', JSON.stringify(updated));
   };
 
-  // --- FIN FUNCIONES BIBLIOTECA ---
-
-  // EFECTO DE AUDIO
+  // Efecto de Audio
   useEffect(() => {
     if (isMuted) return;
     const newTrack = audioTracks[currentEmotion as keyof typeof audioTracks];
-    
     if (!audioRef.current) {
       audioRef.current = new Audio(newTrack);
       audioRef.current.loop = true;
       audioRef.current.volume = 0.5;
     }
-
     if (audioRef.current.src !== newTrack) {
       audioRef.current.pause();
       audioRef.current.src = newTrack;
-      audioRef.current.play().catch(e => console.log("Click para audio"));
+      audioRef.current.play().catch(() => {});
     } else if (audioRef.current.paused) {
-      audioRef.current.play().catch(e => console.log("Click para audio"));
+      audioRef.current.play().catch(() => {});
     }
   }, [currentEmotion, isMuted]);
 
@@ -119,45 +142,63 @@ function App() {
     }
   };
 
-  // CONFIGURACIÓN VIDRIO
-  const glassOpacity = "bg-white/30"; 
-  const glassBlur = "backdrop-blur-xl"; 
-
   return (
     <div className="min-h-screen relative overflow-hidden bg-[#F0EEE9]">
-      <div 
-        className="absolute inset-0 state-mega-gradient transition-all duration-[2000ms] ease-in-out"
-        style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%' }}
-      />
+      
+      {/* ZONA DE CAPTURA (Lo que saldrá en la foto) */}
+      <div ref={captureRef} className="absolute inset-0 w-full h-full">
+        {/* Fondo Animado */}
+        <div 
+          className="absolute inset-0 state-mega-gradient transition-all duration-[2000ms] ease-in-out"
+          style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%' }}
+        />
 
-      <button 
-        onClick={toggleAudio}
-        className="fixed top-6 left-6 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2"
-      >
-        {isMuted ? '🔇 Activar Sonido' : '🔊 Sonido Activado'}
-      </button>
-
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <div className={`w-full max-w-4xl p-10 rounded-[30px] border border-white/50 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 hover:shadow-2xl ${glassOpacity} ${glassBlur}`}>
-          <div className="flex flex-col items-center justify-center">
-            <h1 className="text-5xl font-serif text-gray-800 mb-8 text-center tracking-wide">
-              CromaVerso
-            </h1>
-            <div className="w-full">
-              <TextEditor text={text} setText={setText} />
+        {/* Tarjeta Central */}
+        <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl p-10 rounded-[30px] border border-white/50 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] backdrop-blur-xl bg-white/30 transition-all duration-500">
+            <div className="flex flex-col items-center justify-center relative">
+              <h1 className="text-5xl font-serif text-gray-800 mb-8 text-center tracking-wide">
+                CromaVerso
+              </h1>
+              <div className="w-full">
+                <TextEditor text={text} setText={setText} />
+              </div>
+              {/* Marca de agua pequeña */}
+              <div className="absolute bottom-[-25px] right-0 opacity-0 md:opacity-0 print:opacity-60 text-[10px] text-gray-700 font-serif tracking-widest">
+                HECHO EN CROMAVERSO
+              </div>
             </div>
           </div>
         </div>
       </div>
+      {/* FIN ZONA CAPTURA */}
 
-      {/* Pasamos las nuevas funciones a la Barra Lateral */}
+      {/* --- CONTROLES DE UI (No salen en la foto) --- */}
+      
+      {/* Botón Audio */}
+      <button 
+        onClick={toggleAudio}
+        className="fixed top-6 left-6 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2"
+      >
+        {isMuted ? '🔇' : '🔊'}
+      </button>
+
+      {/* Botón Descargar Imagen (Con icono de cámara) */}
+      <button 
+        onClick={handleDownloadImage}
+        className="fixed top-6 left-24 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group"
+        title="Descargar imagen HD"
+      >
+        <span className="group-hover:scale-110 transition-transform">📷</span>
+        <span className="hidden md:inline">Guardar Imagen</span>
+      </button>
+
       <Sidebar
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
         text={text}
         setText={setText}
         currentEmotion={currentEmotion}
-        // PROPS NUEVAS PARA GUARDADO
         onSave={handleSave}
         savedWritings={savedWritings}
         onLoad={handleLoad}
