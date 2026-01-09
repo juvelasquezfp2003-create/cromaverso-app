@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Sparkles, X, Save, Trash2, FileText, Copy } from 'lucide-react';
+import { BookOpen, Sparkles, X, Save, Trash2, Copy, Search, ChevronDown } from 'lucide-react';
 import { SavedWriting } from '../App';
 
 interface SidebarProps {
@@ -14,7 +14,7 @@ interface SidebarProps {
   onDelete: (id: string) => void;
 }
 
-// --- BASE DE DATOS DE INSPIRACIÓN (TESAURO) ---
+// --- BASE DE DATOS LOCAL (Curada para inspiración rápida) ---
 const emotionalThesaurus: Record<string, string[]> = {
   ira: [
     "Furia", "Cólera", "Rabia", "Indignación", "Arrebato", "Frenesí", 
@@ -38,8 +38,7 @@ const emotionalThesaurus: Record<string, string[]> = {
   ]
 };
 
-// --- BASE DE DATOS DE METÁFORAS (CHISPAZOS CREATIVOS) ---
-// Frases incompletas o evocadoras para desbloquear al escritor
+// --- BASE DE DATOS DE METÁFORAS ---
 const metaphorSparks: Record<string, string[]> = {
   ira: [
     "Era un volcán dormido bajo la piel...",
@@ -81,22 +80,56 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'thesaurus' | 'metaphor' | 'library'>('library');
   const [generatedMetaphor, setGeneratedMetaphor] = useState<string | null>(null);
+  
+  // ESTADOS NUEVOS PARA BUSCADOR
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // Para cambiar manualmente
 
-  // Función para insertar texto en el editor
+  // Categoría efectiva: O la que eligió el usuario manualmente, o la automática
+  const effectiveCategory = selectedCategory || currentEmotion;
+
   const handleInsertText = (textToInsert: string) => {
     setText(text + " " + textToInsert);
   };
 
-  // Función para generar una metáfora nueva
   const generateNewMetaphor = () => {
-    const list = metaphorSparks[currentEmotion] || metaphorSparks['neutral'];
+    const category = selectedCategory || currentEmotion;
+    const list = metaphorSparks[category] || metaphorSparks['neutral'];
     const random = list[Math.floor(Math.random() * list.length)];
     setGeneratedMetaphor(random);
   };
 
+  // --- FUNCIÓN BUSCADOR REAL (API) ---
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    setSearchResults([]);
+
+    try {
+        // Usamos la API de Datamuse con el flag 'es' (Español)
+        const response = await fetch(`https://api.datamuse.com/words?rel_syn=${searchQuery}&v=es&max=10`);
+        const data = await response.json();
+        
+        if (data.length > 0) {
+            setSearchResults(data.map((item: any) => item.word));
+        } else {
+            setSearchResults(['No encontrado']);
+        }
+    } catch (error) {
+        console.error("Error buscando sinónimos", error);
+        setSearchResults(['Error de conexión']);
+    } finally {
+        setIsSearching(false);
+    }
+  };
+
   return (
     <>
-      {/* --- BOTÓN FLOTANTE PARA ABRIR --- */}
+      {/* BOTÓN FLOTANTE */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
@@ -106,7 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
       )}
 
-      {/* --- SIDEBAR --- */}
+      {/* SIDEBAR */}
       <div 
         className={`fixed top-0 right-0 h-full w-80 md:w-96 bg-white/90 backdrop-blur-xl shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
@@ -116,77 +149,66 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-6 border-b border-gray-200 flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-serif text-gray-800">Musa IA</h2>
-            <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">
-              Tono actual: <span className={`font-bold ${
-                currentEmotion === 'ira' ? 'text-red-500' :
-                currentEmotion === 'tristeza' ? 'text-blue-500' :
-                currentEmotion === 'amor' ? 'text-pink-500' : 'text-gray-500'
-              }`}>{currentEmotion}</span>
-            </p>
+            {/* SELECTOR DE CATEGORÍA MANUAL */}
+            <div className="relative mt-1 group">
+                <button className="text-xs uppercase tracking-widest flex items-center gap-1 hover:bg-gray-100 p-1 rounded">
+                   Modo: <span className={`font-bold ${
+                    effectiveCategory === 'ira' ? 'text-red-500' :
+                    effectiveCategory === 'tristeza' ? 'text-blue-500' :
+                    effectiveCategory === 'amor' ? 'text-pink-500' : 'text-gray-500'
+                  }`}>{effectiveCategory}</span>
+                  <ChevronDown size={12} />
+                </button>
+                {/* Menú desplegable simple */}
+                <div className="absolute top-full left-0 mt-1 w-32 bg-white shadow-lg rounded-lg hidden group-hover:block border border-gray-100 p-1 z-10">
+                    {['neutral', 'ira', 'tristeza', 'amor'].map(cat => (
+                        <button 
+                            key={cat}
+                            onClick={() => setSelectedCategory(cat)}
+                            className="block w-full text-left px-3 py-2 text-xs uppercase hover:bg-gray-50 rounded"
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                    <div className="border-t my-1"></div>
+                    <button onClick={() => setSelectedCategory(null)} className="block w-full text-left px-3 py-2 text-xs italic text-gray-400 hover:bg-gray-50">Auto (Detectar)</button>
+                </div>
+            </div>
           </div>
-          <button 
-            onClick={() => setIsOpen(false)}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
+          <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <X size={20} className="text-gray-500" />
           </button>
         </div>
 
-        {/* NAVEGACIÓN (TABS) */}
+        {/* TABS */}
         <div className="flex p-2 gap-2 bg-gray-50/50">
-          <button 
-            onClick={() => setActiveTab('library')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'library' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
-          >
-            📚 Biblioteca
-          </button>
-          <button 
-            onClick={() => setActiveTab('thesaurus')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'thesaurus' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
-          >
-            📖 Tesauro
-          </button>
-          <button 
-            onClick={() => setActiveTab('metaphor')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'metaphor' ? 'bg-white shadow-sm text-amber-600' : 'text-gray-500 hover:bg-gray-100'}`}
-          >
-            ✨ Metáfora
-          </button>
+          <button onClick={() => setActiveTab('library')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'library' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}>📚 Biblio</button>
+          <button onClick={() => setActiveTab('thesaurus')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'thesaurus' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}>📖 Tesauro</button>
+          <button onClick={() => setActiveTab('metaphor')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'metaphor' ? 'bg-white shadow-sm text-amber-600' : 'text-gray-500 hover:bg-gray-100'}`}>✨ Metáfora</button>
         </div>
 
-        {/* CONTENIDO SCROLLABLE */}
+        {/* CONTENIDO */}
         <div className="flex-1 overflow-y-auto p-6">
           
           {/* --- TAB: BIBLIOTECA --- */}
           {activeTab === 'library' && (
             <div className="space-y-4">
-              <button 
-                onClick={onSave}
-                className="w-full py-3 bg-gray-900 text-white rounded-xl shadow-md hover:bg-black transition-all flex items-center justify-center gap-2 font-medium"
-              >
-                <Save size={18} /> Guardar Progreso
+              <button onClick={onSave} className="w-full py-3 bg-gray-900 text-white rounded-xl shadow-md hover:bg-black transition-all flex items-center justify-center gap-2 font-medium">
+                <Save size={18} /> Guardar
               </button>
-              
               <div className="mt-6">
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Tus Escritos</h3>
                 {savedWritings.length === 0 ? (
-                  <div className="text-center py-10 text-gray-400 italic">
-                    No hay escritos guardados aún.
-                  </div>
+                  <div className="text-center py-10 text-gray-400 italic">Vacío... escribe algo.</div>
                 ) : (
                   <div className="space-y-3">
                     {savedWritings.map((w) => (
                       <div key={w.id} className="group p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all flex justify-between items-start">
                         <div onClick={() => onLoad(w)} className="cursor-pointer flex-1">
-                          <h4 className="font-serif text-gray-800 font-medium group-hover:text-indigo-600 transition-colors">{w.title}</h4>
-                          <p className="text-xs text-gray-400 mt-1">{w.date} • {w.emotion}</p>
+                          <h4 className="font-serif text-gray-800 font-medium group-hover:text-indigo-600">{w.title}</h4>
+                          <p className="text-xs text-gray-400 mt-1">{w.date}</p>
                         </div>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); onDelete(w.id); }}
-                          className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(w.id); }} className="p-2 text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
                       </div>
                     ))}
                   </div>
@@ -195,22 +217,46 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* --- TAB: TESAURO CONTEXTUAL --- */}
+          {/* --- TAB: TESAURO MEJORADO (BUSCADOR + LISTAS) --- */}
           {activeTab === 'thesaurus' && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl mb-6">
-                <p className="text-sm text-indigo-800 leading-relaxed">
-                  Aquí tienes palabras de alto impacto relacionadas con tu emoción actual: <strong>{currentEmotion}</strong>.
-                </p>
-              </div>
+              
+              {/* BUSCADOR UNIVERSAL */}
+              <form onSubmit={handleSearch} className="relative mb-6">
+                <input 
+                    type="text" 
+                    placeholder="Buscar sinónimo de..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+                <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
+                <button type="submit" hidden></button>
+              </form>
 
+              {/* RESULTADOS DE BÚSQUEDA */}
+              {searchResults.length > 0 && (
+                 <div className="mb-6">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Resultados web:</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {searchResults.map((word, i) => (
+                            <button key={i} onClick={() => handleInsertText(word)} className="px-3 py-1 bg-white border border-indigo-200 text-indigo-700 rounded-full text-sm hover:bg-indigo-50">
+                                {word}
+                            </button>
+                        ))}
+                    </div>
+                    <hr className="my-4 border-gray-100" />
+                 </div>
+              )}
+              
+              {/* LISTAS CURADAS (Respaldo) */}
+              <p className="text-xs font-bold text-gray-400 uppercase mb-3">Sugerencias para {effectiveCategory}:</p>
               <div className="grid grid-cols-2 gap-3">
-                {(emotionalThesaurus[currentEmotion] || emotionalThesaurus['neutral']).map((word, idx) => (
+                {(emotionalThesaurus[effectiveCategory] || emotionalThesaurus['neutral']).map((word, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleInsertText(word)}
                     className="p-3 text-left bg-white border border-gray-100 rounded-lg hover:border-indigo-300 hover:shadow-sm hover:text-indigo-700 transition-all text-gray-600 text-sm font-medium flex justify-between group"
-                    title="Clic para insertar"
                   >
                     {word}
                     <Copy size={14} className="opacity-0 group-hover:opacity-100 text-indigo-400" />
@@ -220,30 +266,24 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* --- TAB: METÁFORAS (CHISPAZOS) --- */}
+          {/* --- TAB: METÁFORAS --- */}
           {activeTab === 'metaphor' && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col h-full">
               <div className="text-center mb-8">
                 <div className="inline-block p-4 bg-amber-100 text-amber-600 rounded-full mb-4">
                   <Sparkles size={32} />
                 </div>
-                <h3 className="text-lg font-serif text-gray-800">Desbloqueo Creativo</h3>
+                <h3 className="text-lg font-serif text-gray-800">Inspiración</h3>
                 <p className="text-sm text-gray-500 mt-2 px-4">
-                  Genera una frase inicial basada en {currentEmotion} y termina la historia tú mismo.
+                  Frase semilla basada en: <strong>{effectiveCategory}</strong>
                 </p>
               </div>
 
-              {/* TARJETA DE METÁFORA */}
               {generatedMetaphor ? (
                 <div className="p-6 bg-white border-2 border-amber-100 rounded-2xl shadow-sm relative group">
-                   <p className="font-serif text-xl text-gray-700 italic leading-relaxed">
-                     "{generatedMetaphor}"
-                   </p>
-                   <button 
-                    onClick={() => handleInsertText(generatedMetaphor)}
-                    className="mt-4 text-xs font-bold text-amber-600 uppercase tracking-widest hover:text-amber-800 flex items-center gap-2"
-                   >
-                     <Copy size={14} /> Insertar en texto
+                   <p className="font-serif text-xl text-gray-700 italic leading-relaxed">"{generatedMetaphor}"</p>
+                   <button onClick={() => handleInsertText(generatedMetaphor)} className="mt-4 text-xs font-bold text-amber-600 uppercase tracking-widest hover:text-amber-800 flex items-center gap-2">
+                     <Copy size={14} /> Insertar
                    </button>
                 </div>
               ) : (
@@ -256,8 +296,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onClick={generateNewMetaphor}
                 className="mt-8 w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all font-medium flex items-center justify-center gap-2"
               >
-                <Sparkles size={18} />
-                Generar Nueva Idea
+                <Sparkles size={18} /> Generar Nueva Idea
               </button>
             </div>
           )}
