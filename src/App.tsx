@@ -34,7 +34,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   
-  // Estado para el Fondo (Solo Fotos Reales)
+  // Estado para el Fondo (Fotos Reales)
   const [aiBackgroundImage, setAiBackgroundImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -49,18 +49,18 @@ function App() {
 
   const currentEmotion = detectEmotion(text);
 
-  // --- FUNCIÓN MEJORADA: 100% FOTOGRAFÍA ARTÍSTICA ---
+  // --- FUNCIÓN MEJORADA: 100% FOTOGRAFÍA ARTÍSTICA (SIN CACHÉ) ---
   const generateAiBackground = () => {
     // Si el usuario no ha escrito nada, le pedimos amablemente que lo haga
     if (!text.trim()) return alert("Escribe unas palabras para inspirar la fotografía.");
     
     setIsGenerating(true);
     
-    // Generamos un número único para que la foto cambie siempre
-    const seed = Math.floor(Math.random() * 100000);
+    // CORRECCIÓN CLAVE: Usamos la hora exacta (milisegundos) para que la URL sea única siempre.
+    // Esto obliga al navegador a descargar una foto nueva cada vez.
+    const seed = Date.now();
 
-    // PALABRAS CLAVE REFINADAS (Para evitar fotos raras)
-    // Seleccionamos temas muy estéticos: naturaleza, texturas, clima.
+    // PALABRAS CLAVE ESTÉTICAS
     let keywords = '';
     
     switch (currentEmotion) {
@@ -78,7 +78,7 @@ function App() {
             break;
     }
 
-    // Usamos LoremFlickr en HD (1280x720) - Es muy rápido y fiable
+    // Usamos LoremFlickr en HD (1280x720) con el seed de tiempo
     const imageUrl = `https://loremflickr.com/1280/720/${keywords}?lock=${seed}`;
     
     // Precarga de imagen
@@ -278,7 +278,7 @@ function App() {
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* BOTÓN FOTO REAL (SIN IA) */}
+      {/* BOTÓN FOTO REAL (SIN IA, CON CORRECCIÓN DE CACHÉ) */}
       <button 
         onClick={aiBackgroundImage ? clearAiBackground : generateAiBackground}
         className={`fixed top-6 left-20 z-50 p-3 rounded-full backdrop-blur-md transition-all shadow-sm font-medium text-sm flex items-center gap-2 group ${
