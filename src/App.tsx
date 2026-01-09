@@ -49,39 +49,36 @@ function App() {
 
   const currentEmotion = detectEmotion(text);
 
-  // --- FUNCIÓN MEJORADA: 100% FOTOGRAFÍA ARTÍSTICA (SIN CACHÉ) ---
+  // --- FUNCIÓN FINAL: BÚSQUEDA AMPLIA DE FOTOS ---
   const generateAiBackground = () => {
-    // Si el usuario no ha escrito nada, le pedimos amablemente que lo haga
     if (!text.trim()) return alert("Escribe unas palabras para inspirar la fotografía.");
     
     setIsGenerating(true);
     
-    // CORRECCIÓN CLAVE: Usamos la hora exacta (milisegundos) para que la URL sea única siempre.
-    // Esto obliga al navegador a descargar una foto nueva cada vez.
+    // LISTAS DE PALABRAS CLAVE
+    const keywordsList = {
+        ira: ['fire', 'storm', 'volcano', 'explosion', 'red_smoke', 'lightning', 'abstract_red'],
+        tristeza: ['rain', 'fog', 'lonely', 'grey', 'winter', 'storm_sea', 'sad_art'],
+        amor: ['rose', 'sunset', 'couple', 'romantic', 'paris', 'flowers', 'heart', 'wedding'],
+        neutral: ['calm', 'book', 'coffee', 'minimal', 'zen', 'clouds', 'nature', 'art']
+    };
+
+    // 1. Detectamos la emoción
+    const emotionKey = (currentEmotion in keywordsList) ? currentEmotion : 'neutral';
+    
+    // 2. OBTENER TODAS LAS PALABRAS (Nueva estrategia)
+    // En lugar de elegir una, las unimos todas con comas.
+    // Esto le da al banco de imágenes muchas más opciones para elegir.
+    const list = keywordsList[emotionKey as keyof typeof keywordsList];
+    const allKeywords = list.join(','); // Ejemplo: "rain,fog,lonely,grey..."
+
+    // 3. Usamos la hora para forzar una imagen nueva
     const seed = Date.now();
 
-    // PALABRAS CLAVE ESTÉTICAS
-    let keywords = '';
+    // URL FINAL (Usando el grupo de palabras)
+    const imageUrl = `https://loremflickr.com/1280/720/${allKeywords}?lock=${seed}`;
     
-    switch (currentEmotion) {
-        case 'ira':
-            keywords = 'fire,storm,volcano,red_texture,abstract_red'; 
-            break;
-        case 'tristeza':
-            keywords = 'rain_window,fog,mist,ocean_storm,grey_sky,lonely_tree';
-            break;
-        case 'amor':
-            keywords = 'flowers,sunset,roses,pink_sky,romantic_paris,heart_bokeh';
-            break;
-        default: // neutral
-            keywords = 'minimalist,white_texture,calm_sea,notebook,coffee,zen';
-            break;
-    }
-
-    // Usamos LoremFlickr en HD (1280x720) con el seed de tiempo
-    const imageUrl = `https://loremflickr.com/1280/720/${keywords}?lock=${seed}`;
-    
-    // Precarga de imagen
+    // Precarga
     const img = new Image();
     img.src = imageUrl;
     
@@ -92,7 +89,9 @@ function App() {
 
     img.onerror = () => {
         console.error("Error cargando foto");
-        alert("Hubo un problema de conexión con el banco de imágenes.");
+        // Si falla, un último intento con arte genérico
+        const backupUrl = `https://loremflickr.com/1280/720/abstract,art?lock=${seed+1}`;
+        setAiBackgroundImage(backupUrl);
         setIsGenerating(false);
     };
   };
@@ -278,7 +277,7 @@ function App() {
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* BOTÓN FOTO REAL (SIN IA, CON CORRECCIÓN DE CACHÉ) */}
+      {/* BOTÓN FOTO REAL (BÚSQUEDA AMPLIA) */}
       <button 
         onClick={aiBackgroundImage ? clearAiBackground : generateAiBackground}
         className={`fixed top-6 left-20 z-50 p-3 rounded-full backdrop-blur-md transition-all shadow-sm font-medium text-sm flex items-center gap-2 group ${
