@@ -49,35 +49,47 @@ function App() {
 
   const currentEmotion = detectEmotion(text);
 
-  // --- FUNCIÓN FINAL: BÚSQUEDA AMPLIA DE FOTOS ---
+  // --- FUNCIÓN DEFINITIVA: SELECCIÓN ALEATORIA DE PALABRA ---
   const generateAiBackground = () => {
     if (!text.trim()) return alert("Escribe unas palabras para inspirar la fotografía.");
     
     setIsGenerating(true);
     
-    // LISTAS DE PALABRAS CLAVE
+    // LISTAS GIGANTES DE PALABRAS (El código elegirá UNA sola cada vez)
     const keywordsList = {
-        ira: ['fire', 'storm', 'volcano', 'explosion', 'red_smoke', 'lightning', 'abstract_red'],
-        tristeza: ['rain', 'fog', 'lonely', 'grey', 'winter', 'storm_sea', 'sad_art'],
-        amor: ['rose', 'sunset', 'couple', 'romantic', 'paris', 'flowers', 'heart', 'wedding'],
-        neutral: ['calm', 'book', 'coffee', 'minimal', 'zen', 'clouds', 'nature', 'art']
+        ira: [
+            'fire', 'volcano', 'explosion', 'lightning', 'storm', 'boxing', 
+            'anger', 'scream', 'red_smoke', 'war', 'destruction', 'flames'
+        ],
+        tristeza: [
+            'rain', 'fog', 'winter', 'loneliness', 'cemetery', 'abandoned', 
+            'dark_sea', 'grey_sky', 'tunnel', 'broken_glass', 'tears', 'sad_man'
+        ],
+        amor: [
+            'kiss', 'sunset', 'rose', 'wedding', 'heart', 'paris', 
+            'couple', 'romance', 'flowers', 'gift', 'holding_hands', 'love'
+        ],
+        neutral: [
+            'nature', 'desk', 'writing', 'coffee', 'library', 'book', 
+            'forest', 'mountain', 'river', 'calm', 'white_room', 'abstract_art'
+        ]
     };
 
-    // 1. Detectamos la emoción
+    // 1. Detectar emoción
     const emotionKey = (currentEmotion in keywordsList) ? currentEmotion : 'neutral';
     
-    // 2. OBTENER TODAS LAS PALABRAS (Nueva estrategia)
-    // En lugar de elegir una, las unimos todas con comas.
-    // Esto le da al banco de imágenes muchas más opciones para elegir.
+    // 2. ELEGIR UNA SOLA PALABRA AL AZAR
     const list = keywordsList[emotionKey as keyof typeof keywordsList];
-    const allKeywords = list.join(','); // Ejemplo: "rain,fog,lonely,grey..."
+    const randomKeyword = list[Math.floor(Math.random() * list.length)];
 
-    // 3. Usamos la hora para forzar una imagen nueva
-    const seed = Date.now();
+    // 3. Usar la hora y un número extra para romper el caché del navegador totalmente
+    const seed = Date.now() + Math.floor(Math.random() * 9999);
 
-    // URL FINAL (Usando el grupo de palabras)
-    const imageUrl = `https://loremflickr.com/1280/720/${allKeywords}?lock=${seed}`;
+    // URL FINAL (Solo enviamos UNA palabra para tener más resultados)
+    const imageUrl = `https://loremflickr.com/1280/720/${randomKeyword}?lock=${seed}`;
     
+    console.log("Buscando foto de:", randomKeyword); // Para depurar si quieres ver qué busca
+
     // Precarga
     const img = new Image();
     img.src = imageUrl;
@@ -89,8 +101,8 @@ function App() {
 
     img.onerror = () => {
         console.error("Error cargando foto");
-        // Si falla, un último intento con arte genérico
-        const backupUrl = `https://loremflickr.com/1280/720/abstract,art?lock=${seed+1}`;
+        // Backup simple
+        const backupUrl = `https://loremflickr.com/1280/720/art?lock=${seed+1}`;
         setAiBackgroundImage(backupUrl);
         setIsGenerating(false);
     };
@@ -277,7 +289,7 @@ function App() {
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* BOTÓN FOTO REAL (BÚSQUEDA AMPLIA) */}
+      {/* BOTÓN FOTO REAL (SIN IA, CON CORRECCIÓN DE CACHÉ) */}
       <button 
         onClick={aiBackgroundImage ? clearAiBackground : generateAiBackground}
         className={`fixed top-6 left-20 z-50 p-3 rounded-full backdrop-blur-md transition-all shadow-sm font-medium text-sm flex items-center gap-2 group ${
