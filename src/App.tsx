@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import html2canvas from 'html2canvas'; // Librería de fotos
+import html2canvas from 'html2canvas'; 
 import TextEditor from './components/TextEditor';
 import Sidebar from './components/Sidebar';
 
-// Definición de tipos para el guardado
+// TIPOS
 export interface SavedWriting {
   id: string;
   title: string;
@@ -12,7 +12,7 @@ export interface SavedWriting {
   emotion: string;
 }
 
-// 1. DICCIONARIO EMOCIONAL (Rápido)
+// 1. DICCIONARIO EMOCIONAL
 const detectEmotion = (text: string) => {
   const recentText = text.slice(-60).toLowerCase(); 
   if (recentText.match(/ira|furia|odio|rabia|fuego|sangre|grito|ardor|guerra|golpe|infierno|maldit|quemar|destruir|matar|enemigo|colera|volcán|ceniza/)) return 'ira';
@@ -21,7 +21,7 @@ const detectEmotion = (text: string) => {
   return 'neutral';
 };
 
-// 2. AUDIOS (Recuerda poner tus propios links si estos caducan)
+// 2. AUDIOS
 const audioTracks = {
   neutral: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
   ira: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3',
@@ -32,178 +32,207 @@ const audioTracks = {
 function App() {
   const [text, setText] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMuted, setIsMuted] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   
-  // Referencia para la "Cámara"
-  const captureRef = useRef<HTMLDivElement>(null);
+  // Referencias para captura
+  const captureRef = useRef<HTMLDivElement>(null);      // Captura de documento completo
+  const postcardRef = useRef<HTMLDivElement>(null);     // Captura artística (Oculta)
 
-  // Carga de Biblioteca
+  // Estado de biblioteca
   const [savedWritings, setSavedWritings] = useState<SavedWriting[]>(() => {
     const saved = localStorage.getItem('cromaverso_library');
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [isMuted, setIsMuted] = useState(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentEmotion = detectEmotion(text);
 
-  // --- FUNCIÓN FOTOGRÁFICA DE ALTA CALIDAD ---
-  const handleDownloadImage = async () => {
+  // --- MODO 1: DOCUMENTO COMPLETO (La "Sábana") ---
+  const handleDownloadFull = async () => {
     if (!captureRef.current) return;
-    
-    // Ocultar placeholder temporalmente
-    const textarea = document.querySelector('textarea');
+
+    // Lógica de expansión (igual que antes)
+    const textarea = captureRef.current.querySelector('textarea');
+    const cardElement = captureRef.current.querySelector('.backdrop-blur-2xl') as HTMLElement;
+    const textContainer = textarea?.parentElement;
     const originalPlaceholder = textarea?.placeholder;
-    if (textarea) textarea.placeholder = "";
+    const originalCardStyles = cardElement ? { ...cardElement.style } : null;
+
+    let tempTextDiv: HTMLDivElement | null = null;
+    if (textarea && textContainer) {
+        tempTextDiv = document.createElement('div');
+        const computedStyle = window.getComputedStyle(textarea);
+        tempTextDiv.style.cssText = `
+            font-family: ${computedStyle.fontFamily};
+            font-size: ${computedStyle.fontSize};
+            line-height: ${computedStyle.lineHeight};
+            color: ${computedStyle.color};
+            text-align: ${computedStyle.textAlign};
+            white-space: pre-wrap;
+            word-break: break-word;
+            padding: ${computedStyle.padding};
+            width: 100%;
+        `;
+        tempTextDiv.innerText = text; 
+        textarea.style.display = 'none';
+        textContainer.appendChild(tempTextDiv);
+    }
+    if (textarea) textarea.placeholder = ""; 
+    if (cardElement) {
+        cardElement.style.backgroundColor = "rgba(255, 255, 255, 0.95)"; // Casi sólido para leer
+        cardElement.style.boxShadow = "none";
+        cardElement.style.height = 'auto';
+    }
 
     try {
+      await new Promise(resolve => setTimeout(resolve, 100));
       const canvas = await html2canvas(captureRef.current, {
-        useCORS: true,
-        scale: 4, // <--- AQUÍ ESTÁ EL CAMBIO: Calidad Ultra HD (4x)
-        backgroundColor: null, // Mantiene transparencias si las hay
-        logging: false
+        scale: 2, 
+        backgroundColor: null,
+        height: captureRef.current.scrollHeight + 50,
+        windowHeight: captureRef.current.scrollHeight + 50,
+        onclone: (clonedDoc) => {
+             const clonedCard = clonedDoc.querySelector('.backdrop-blur-2xl') as HTMLElement;
+             if(clonedCard) clonedCard.style.height = 'auto';
+        }
       });
-
-      // Descarga automática
       const link = document.createElement('a');
-      link.download = `CromaVerso-${currentEmotion}-${Date.now()}.png`;
-      link.href = canvas.toDataURL('image/png', 1.0); // Calidad máxima 1.0
+      link.download = `CromaVerso-Doc-${currentEmotion}.png`;
+      link.href = canvas.toDataURL('image/png');
       link.click();
-    } catch (error) {
-      console.error("Error al capturar:", error);
-      alert("Error al generar la imagen. Intenta de nuevo.");
-    } finally {
-      // Restaurar placeholder
+    } catch (e) { console.error(e); alert("Error al guardar documento."); } 
+    finally {
       if (textarea && originalPlaceholder) textarea.placeholder = originalPlaceholder;
+      if (cardElement && originalCardStyles) {
+          cardElement.style.backgroundColor = originalCardStyles.backgroundColor || '';
+          cardElement.style.boxShadow = originalCardStyles.boxShadow || '';
+          cardElement.style.height = originalCardStyles.height || '';
+      }
+      if (textarea && tempTextDiv && textContainer) {
+        textarea.style.display = '';
+        textContainer.removeChild(tempTextDiv);
+      }
     }
   };
-  // ---------------------------------------------
 
+  // --- MODO 2: POSTAL ARTÍSTICA (NUEVO) ---
+  const handleDownloadPostcard = async () => {
+    if (!postcardRef.current) return;
+    
+    // Hacemos visible el contenedor oculto temporalmente para la foto
+    postcardRef.current.style.display = 'flex';
+
+    try {
+      const canvas = await html2canvas(postcardRef.current, {
+        scale: 3, // Alta calidad
+        backgroundColor: null, // Respetar gradiente
+      });
+      
+      const link = document.createElement('a');
+      link.download = `CromaVerso-Postal-${currentEmotion}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) { console.error(e); alert("Error creando postal."); }
+    finally {
+      // Volvemos a ocultar
+      postcardRef.current.style.display = 'none';
+    }
+  };
+
+  // --- LÓGICA DE AUDIO Y BIBLIOTECA (Igual que antes) ---
   const handleSave = () => {
     if (!text.trim()) return alert("El lienzo está vacío.");
-    const title = prompt("¿Título de la obra?") || "Sin título";
-    const newWriting: SavedWriting = {
-      id: Date.now().toString(),
-      title,
-      content: text,
-      date: new Date().toLocaleDateString(),
-      emotion: currentEmotion
-    };
+    const title = prompt("¿Título?") || "Sin título";
+    const newWriting = { id: Date.now().toString(), title, content: text, date: new Date().toLocaleDateString(), emotion: currentEmotion };
     const updated = [newWriting, ...savedWritings];
     setSavedWritings(updated);
     localStorage.setItem('cromaverso_library', JSON.stringify(updated));
   };
+  const handleLoad = (w: SavedWriting) => { if (text.length > 10 && !window.confirm("¿Reemplazar?")) return; setText(w.content); };
+  const handleDelete = (id: string) => { if (!window.confirm("¿Borrar?")) return; setSavedWritings(savedWritings.filter(w => w.id !== id)); };
 
-  const handleLoad = (w: SavedWriting) => {
-    if (text.length > 10 && !window.confirm("¿Reemplazar actual?")) return;
-    setText(w.content);
-  };
-
-  const handleDelete = (id: string) => {
-    if (!window.confirm("¿Borrar permanentemente?")) return;
-    const updated = savedWritings.filter(w => w.id !== id);
-    setSavedWritings(updated);
-    localStorage.setItem('cromaverso_library', JSON.stringify(updated));
-  };
-
-  // Efecto de Audio
   useEffect(() => {
     if (isMuted) return;
     const newTrack = audioTracks[currentEmotion as keyof typeof audioTracks];
-    if (!audioRef.current) {
-      audioRef.current = new Audio(newTrack);
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0.5;
-    }
-    if (audioRef.current.src !== newTrack) {
-      audioRef.current.pause();
-      audioRef.current.src = newTrack;
-      audioRef.current.play().catch(() => {});
-    } else if (audioRef.current.paused) {
-      audioRef.current.play().catch(() => {});
-    }
+    if (!audioRef.current) { audioRef.current = new Audio(newTrack); audioRef.current.loop = true; audioRef.current.volume = 0.5; }
+    if (audioRef.current.src !== newTrack) { audioRef.current.pause(); audioRef.current.src = newTrack; audioRef.current.play().catch(()=>{}); }
+    else if (audioRef.current.paused) { audioRef.current.play().catch(()=>{}); }
   }, [currentEmotion, isMuted]);
 
-  const toggleAudio = () => {
-    if (isMuted) {
-      setIsMuted(false);
-      if (audioRef.current) audioRef.current.play();
-    } else {
-      setIsMuted(true);
-      if (audioRef.current) audioRef.current.pause();
-    }
-  };
-
+  const toggleAudio = () => setIsMuted(!isMuted);
   const getBackgroundPosition = (emotion: string) => {
-    switch (emotion) {
-      case 'ira': return '0% 100%';
-      case 'tristeza': return '100% 100%';
-      case 'amor': return '100% 0%';
-      default: return '0% 0%';
-    }
+    switch (emotion) { case 'ira': return '0% 100%'; case 'tristeza': return '100% 100%'; case 'amor': return '100% 0%'; default: return '0% 0%'; }
   };
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-[#F0EEE9]">
       
-      {/* ZONA DE CAPTURA (Lo que saldrá en la foto) */}
+      {/* 1. ZONA VISIBLE (Editor) */}
       <div ref={captureRef} className="absolute inset-0 w-full h-full">
-        {/* Fondo Animado */}
         <div 
           className="absolute inset-0 state-mega-gradient transition-all duration-[2000ms] ease-in-out"
           style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%' }}
         />
-
-        {/* Tarjeta Central */}
         <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl p-10 rounded-[30px] border border-white/50 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] backdrop-blur-xl bg-white/30 transition-all duration-500">
+          <div className="w-full max-w-4xl p-10 rounded-[30px] border border-white/50 shadow-sm backdrop-blur-2xl bg-white/10 transition-all duration-500">
             <div className="flex flex-col items-center justify-center relative">
-              <h1 className="text-5xl font-serif text-gray-800 mb-8 text-center tracking-wide">
-                CromaVerso
-              </h1>
-              <div className="w-full">
-                <TextEditor text={text} setText={setText} />
-              </div>
-              {/* Marca de agua pequeña */}
-              <div className="absolute bottom-[-25px] right-0 opacity-0 md:opacity-0 print:opacity-60 text-[10px] text-gray-700 font-serif tracking-widest">
-                HECHO EN CROMAVERSO
-              </div>
+              <h1 className="text-5xl font-serif text-gray-800 mb-8 text-center tracking-wide">CromaVerso</h1>
+              <div className="w-full"><TextEditor text={text} setText={setText} /></div>
+              <div className="absolute bottom-[-20px] right-0 opacity-0 md:opacity-0 print:opacity-60 text-[10px] text-gray-700 font-serif tracking-widest">HECHO EN CROMAVERSO</div>
             </div>
           </div>
         </div>
       </div>
-      {/* FIN ZONA CAPTURA */}
 
-      {/* --- CONTROLES DE UI (No salen en la foto) --- */}
-      
-      {/* Botón Audio */}
-      <button 
-        onClick={toggleAudio}
-        className="fixed top-6 left-6 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2"
+      {/* 2. ZONA OCULTA (PLANTILLA PARA POSTAL ARTÍSTICA) 
+          Esto NO se ve en pantalla, pero se usa para generar la imagen bonita */}
+      <div 
+        ref={postcardRef}
+        className="fixed top-0 left-0 hidden flex-col items-center justify-center p-12 text-center"
+        style={{
+            width: '1080px',    // Ancho Instagram
+            height: '1350px',   // Alto Instagram Portrait
+            background: 'linear-gradient(135deg, #F0EEE9 0%, #fad0c4 50%, #bdc3c7 100%)', // Fondo base
+            zIndex: -10
+        }}
       >
+         {/* Fondo dinámico replicado para la postal */}
+         <div className="absolute inset-0 state-mega-gradient" 
+              style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%', opacity: 0.8 }} 
+         />
+         
+         {/* Contenido de la Postal */}
+         <div className="relative z-10 p-16 border-2 border-white/40 rounded-3xl backdrop-blur-sm bg-white/10 flex flex-col items-center justify-center h-full w-full">
+            <h2 className="text-6xl font-serif text-gray-900 mb-12 drop-shadow-sm">CromaVerso</h2>
+            
+            {/* El poema con estilo artístico */}
+            <div className="text-4xl text-gray-800 font-serif leading-relaxed italic max-h-[800px] overflow-hidden text-ellipsis px-8">
+                "{text.length > 400 ? text.slice(0, 400) + '...' : text}"
+            </div>
+
+            <div className="mt-12 text-2xl text-gray-600 font-medium tracking-widest uppercase">
+                — {currentEmotion} —
+            </div>
+         </div>
+      </div>
+
+
+      {/* --- CONTROLES UI --- */}
+      <button onClick={toggleAudio} className="fixed top-6 left-6 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2">
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* Botón Descargar Imagen (Con icono de cámara) */}
-      <button 
-        onClick={handleDownloadImage}
-        className="fixed top-6 left-24 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group"
-        title="Descargar imagen HD"
-      >
-        <span className="group-hover:scale-110 transition-transform">📷</span>
-        <span className="hidden md:inline">Guardar Imagen</span>
+      {/* BOTÓN 1: DOCUMENTO (Cámara normal) */}
+      <button onClick={handleDownloadFull} className="fixed top-6 left-20 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento Completo">
+        <span>📄</span>
       </button>
 
-      <Sidebar
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-        text={text}
-        setText={setText}
-        currentEmotion={currentEmotion}
-        onSave={handleSave}
-        savedWritings={savedWritings}
-        onLoad={handleLoad}
-        onDelete={handleDelete}
-      />
+      {/* BOTÓN 2: POSTAL ARTÍSTICA (Pincel) */}
+      <button onClick={handleDownloadPostcard} className="fixed top-6 left-36 z-50 p-3 rounded-full bg-indigo-100/80 backdrop-blur-md hover:bg-indigo-200 transition-all shadow-sm text-indigo-900 font-medium text-sm flex items-center gap-2 group" title="Crear Postal Artística">
+        <span className="group-hover:scale-110 transition-transform">🎨 Postal</span>
+      </button>
+
+      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} text={text} setText={setText} currentEmotion={currentEmotion} onSave={handleSave} savedWritings={savedWritings} onLoad={handleLoad} onDelete={handleDelete} />
     </div>
   );
 }
