@@ -3,7 +3,6 @@ import html2canvas from 'html2canvas';
 import TextEditor from './components/TextEditor';
 import Sidebar from './components/Sidebar';
 
-// TIPOS
 export interface SavedWriting {
   id: string;
   title: string;
@@ -12,7 +11,6 @@ export interface SavedWriting {
   emotion: string;
 }
 
-// 1. DICCIONARIO EMOCIONAL
 const detectEmotion = (text: string) => {
   const recentText = text.slice(-60).toLowerCase(); 
   if (recentText.match(/ira|furia|odio|rabia|fuego|sangre|grito|ardor|guerra|golpe|infierno|maldit|quemar|destruir|matar|enemigo|colera|volcán|ceniza/)) return 'ira';
@@ -21,7 +19,6 @@ const detectEmotion = (text: string) => {
   return 'neutral';
 };
 
-// 2. AUDIOS
 const audioTracks = {
   neutral: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
   ira: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3',
@@ -33,13 +30,15 @@ function App() {
   const [text, setText] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   
-  // Referencias para captura
-  const captureRef = useRef<HTMLDivElement>(null);      // Captura de documento completo
-  const postcardRef = useRef<HTMLDivElement>(null);     // Captura artística (Oculta)
+  // NUEVO: Estado para guardar la imagen de la IA
+  const [aiBackgroundImage, setAiBackgroundImage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Estado de biblioteca
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);      
+  const postcardRef = useRef<HTMLDivElement>(null);     
+
   const [savedWritings, setSavedWritings] = useState<SavedWriting[]>(() => {
     const saved = localStorage.getItem('cromaverso_library');
     return saved ? JSON.parse(saved) : [];
@@ -47,11 +46,40 @@ function App() {
 
   const currentEmotion = detectEmotion(text);
 
-  // --- MODO 1: DOCUMENTO COMPLETO (La "Sábana") ---
+  // --- NUEVA FUNCIÓN: GENERAR FONDO IA ---
+  const generateAiBackground = () => {
+    if (!text.trim()) return alert("Escribe algo para que la IA se inspire.");
+    
+    setIsGenerating(true);
+    
+    // 1. Crear el Prompt (La instrucción para la IA)
+    // Combinamos la emoción + palabras clave artísticas
+    const prompt = `Abstract artistic background representing ${currentEmotion}, ${text.slice(0, 50)}, ethereal, cinematic lighting, 4k, wallpaper style, no text`;
+    
+    // 2. Codificar para URL
+    const encodedPrompt = encodeURIComponent(prompt);
+    
+    // 3. URL Mágica de Pollinations (Gratis)
+    // Usamos un número aleatorio (seed) para que siempre sea distinta
+    const seed = Math.floor(Math.random() * 1000);
+    const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1920&height=1080&seed=${seed}&nologo=true`;
+
+    // 4. Precargar la imagen antes de mostrarla
+    const img = new Image();
+    img.src = imageUrl;
+    img.onload = () => {
+        setAiBackgroundImage(imageUrl);
+        setIsGenerating(false);
+    };
+  };
+
+  const clearAiBackground = () => {
+    setAiBackgroundImage(null);
+  };
+  // ----------------------------------------
+
   const handleDownloadFull = async () => {
     if (!captureRef.current) return;
-
-    // Lógica de expansión (igual que antes)
     const textarea = captureRef.current.querySelector('textarea');
     const cardElement = captureRef.current.querySelector('.backdrop-blur-2xl') as HTMLElement;
     const textContainer = textarea?.parentElement;
@@ -79,7 +107,7 @@ function App() {
     }
     if (textarea) textarea.placeholder = ""; 
     if (cardElement) {
-        cardElement.style.backgroundColor = "rgba(255, 255, 255, 0.95)"; // Casi sólido para leer
+        cardElement.style.backgroundColor = "rgba(255, 255, 255, 0.95)"; 
         cardElement.style.boxShadow = "none";
         cardElement.style.height = 'auto';
     }
@@ -89,6 +117,7 @@ function App() {
       const canvas = await html2canvas(captureRef.current, {
         scale: 2, 
         backgroundColor: null,
+        useCORS: true, // Importante para descargar imágenes externas (IA)
         height: captureRef.current.scrollHeight + 50,
         windowHeight: captureRef.current.scrollHeight + 50,
         onclone: (clonedDoc) => {
@@ -115,31 +144,25 @@ function App() {
     }
   };
 
-  // --- MODO 2: POSTAL ARTÍSTICA (NUEVO) ---
   const handleDownloadPostcard = async () => {
     if (!postcardRef.current) return;
-    
-    // Hacemos visible el contenedor oculto temporalmente para la foto
     postcardRef.current.style.display = 'flex';
-
     try {
       const canvas = await html2canvas(postcardRef.current, {
-        scale: 3, // Alta calidad
-        backgroundColor: null, // Respetar gradiente
+        scale: 3, 
+        backgroundColor: null, 
+        useCORS: true // Importante para la IA
       });
-      
       const link = document.createElement('a');
       link.download = `CromaVerso-Postal-${currentEmotion}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (e) { console.error(e); alert("Error creando postal."); }
     finally {
-      // Volvemos a ocultar
       postcardRef.current.style.display = 'none';
     }
   };
 
-  // --- LÓGICA DE AUDIO Y BIBLIOTECA (Igual que antes) ---
   const handleSave = () => {
     if (!text.trim()) return alert("El lienzo está vacío.");
     const title = prompt("¿Título?") || "Sin título";
@@ -169,10 +192,27 @@ function App() {
       
       {/* 1. ZONA VISIBLE (Editor) */}
       <div ref={captureRef} className="absolute inset-0 w-full h-full">
-        <div 
-          className="absolute inset-0 state-mega-gradient transition-all duration-[2000ms] ease-in-out"
-          style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%' }}
-        />
+        
+        {/* FONDO: Si hay imagen de IA, mostramos esa. Si no, mostramos el degradado de colores */}
+        {aiBackgroundImage ? (
+            <div 
+                className="absolute inset-0 transition-all duration-1000 ease-in-out"
+                style={{ 
+                    backgroundImage: `url(${aiBackgroundImage})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                }}
+            >
+                {/* Capa oscura para que se lea el texto sobre la imagen */}
+                <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
+            </div>
+        ) : (
+            <div 
+            className="absolute inset-0 state-mega-gradient transition-all duration-[2000ms] ease-in-out"
+            style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%' }}
+            />
+        )}
+
         <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
           <div className="w-full max-w-4xl p-10 rounded-[30px] border border-white/50 shadow-sm backdrop-blur-2xl bg-white/10 transition-all duration-500">
             <div className="flex flex-col items-center justify-center relative">
@@ -184,33 +224,29 @@ function App() {
         </div>
       </div>
 
-      {/* 2. ZONA OCULTA (PLANTILLA PARA POSTAL ARTÍSTICA) 
-          Esto NO se ve en pantalla, pero se usa para generar la imagen bonita */}
+      {/* 2. ZONA OCULTA (PLANTILLA PARA POSTAL ARTÍSTICA) */}
       <div 
         ref={postcardRef}
         className="fixed top-0 left-0 hidden flex-col items-center justify-center p-12 text-center"
-        style={{
-            width: '1080px',    // Ancho Instagram
-            height: '1350px',   // Alto Instagram Portrait
-            background: 'linear-gradient(135deg, #F0EEE9 0%, #fad0c4 50%, #bdc3c7 100%)', // Fondo base
-            zIndex: -10
-        }}
+        style={{ width: '1080px', height: '1350px', zIndex: -10 }}
       >
-         {/* Fondo dinámico replicado para la postal */}
-         <div className="absolute inset-0 state-mega-gradient" 
-              style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%', opacity: 0.8 }} 
-         />
+         {/* Fondo Postal: Igual, soporta IA o Color */}
+         {aiBackgroundImage ? (
+            <div className="absolute inset-0" style={{ backgroundImage: `url(${aiBackgroundImage})`, backgroundSize: 'cover' }}>
+                 <div className="absolute inset-0 bg-black/40"></div>
+            </div>
+         ) : (
+            <div className="absolute inset-0 state-mega-gradient" 
+                style={{ backgroundPosition: getBackgroundPosition(currentEmotion), backgroundSize: '200% 200%' }} 
+            />
+         )}
          
-         {/* Contenido de la Postal */}
          <div className="relative z-10 p-16 border-2 border-white/40 rounded-3xl backdrop-blur-sm bg-white/10 flex flex-col items-center justify-center h-full w-full">
-            <h2 className="text-6xl font-serif text-gray-900 mb-12 drop-shadow-sm">CromaVerso</h2>
-            
-            {/* El poema con estilo artístico */}
-            <div className="text-4xl text-gray-800 font-serif leading-relaxed italic max-h-[800px] overflow-hidden text-ellipsis px-8">
+            <h2 className="text-6xl font-serif text-white mb-12 drop-shadow-lg">CromaVerso</h2>
+            <div className="text-4xl text-white font-serif leading-relaxed italic max-h-[800px] overflow-hidden text-ellipsis px-8 drop-shadow-md">
                 "{text.length > 400 ? text.slice(0, 400) + '...' : text}"
             </div>
-
-            <div className="mt-12 text-2xl text-gray-600 font-medium tracking-widest uppercase">
+            <div className="mt-12 text-2xl text-white/80 font-medium tracking-widest uppercase">
                 — {currentEmotion} —
             </div>
          </div>
@@ -222,13 +258,23 @@ function App() {
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* BOTÓN 1: DOCUMENTO (Cámara normal) */}
-      <button onClick={handleDownloadFull} className="fixed top-6 left-20 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento Completo">
+      {/* NUEVO BOTÓN: IA MAGIC ✨ */}
+      <button 
+        onClick={aiBackgroundImage ? clearAiBackground : generateAiBackground}
+        className={`fixed top-6 left-20 z-50 p-3 rounded-full backdrop-blur-md transition-all shadow-sm font-medium text-sm flex items-center gap-2 group ${
+            isGenerating ? 'bg-purple-200 animate-pulse cursor-wait' : 'bg-white/40 hover:bg-white/60 text-gray-700'
+        }`}
+        title="Generar fondo con IA"
+        disabled={isGenerating}
+      >
+        {isGenerating ? '🔮 Creando...' : (aiBackgroundImage ? '❌ Quitar IA' : '✨ IA Magic')}
+      </button>
+
+      <button onClick={handleDownloadFull} className="fixed top-6 left-48 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento Completo">
         <span>📄</span>
       </button>
 
-      {/* BOTÓN 2: POSTAL ARTÍSTICA (Pincel) */}
-      <button onClick={handleDownloadPostcard} className="fixed top-6 left-36 z-50 p-3 rounded-full bg-indigo-100/80 backdrop-blur-md hover:bg-indigo-200 transition-all shadow-sm text-indigo-900 font-medium text-sm flex items-center gap-2 group" title="Crear Postal Artística">
+      <button onClick={handleDownloadPostcard} className="fixed top-6 left-64 z-50 p-3 rounded-full bg-indigo-100/80 backdrop-blur-md hover:bg-indigo-200 transition-all shadow-sm text-indigo-900 font-medium text-sm flex items-center gap-2 group" title="Crear Postal Artística">
         <span className="group-hover:scale-110 transition-transform">🎨 Postal</span>
       </button>
 
