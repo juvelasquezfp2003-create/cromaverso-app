@@ -34,7 +34,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   
-  // Estado para la IA / Fondo
+  // Estado para el Fondo (Solo Fotos Reales)
   const [aiBackgroundImage, setAiBackgroundImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -49,56 +49,50 @@ function App() {
 
   const currentEmotion = detectEmotion(text);
 
-  // --- FUNCIÓN INTELIGENTE (IA RÁPIDA + FOTOS) ---
+  // --- FUNCIÓN MEJORADA: 100% FOTOGRAFÍA ARTÍSTICA ---
   const generateAiBackground = () => {
-    if (!text.trim()) return alert("Escribe algo para inspirar el fondo.");
+    // Si el usuario no ha escrito nada, le pedimos amablemente que lo haga
+    if (!text.trim()) return alert("Escribe unas palabras para inspirar la fotografía.");
     
     setIsGenerating(true);
     
-    // A veces usamos IA (80%), a veces fotos reales (20%) para variar y ser rápidos
-    const useRealPhoto = Math.random() > 0.8; 
+    // Generamos un número único para que la foto cambie siempre
+    const seed = Math.floor(Math.random() * 100000);
 
-    let imageUrl = '';
-    const seed = Math.floor(Math.random() * 10000);
-
-    if (useRealPhoto) {
-        // MODO FOTO REAL (Instantáneo)
-        const keywords = currentEmotion === 'neutral' ? 'nature,calm' : 
-                         currentEmotion === 'ira' ? 'fire,storm,abstract' :
-                         currentEmotion === 'tristeza' ? 'rain,fog,melancholy' : 'flowers,sky,love';
-        imageUrl = `https://loremflickr.com/1280/720/${keywords}?lock=${seed}`;
-    } else {
-        // MODO IA OPTIMIZADA (Más rápida)
-        // 1. Usamos 1280x720 en vez de 1920x1080 (Mitad de tiempo de carga)
-        // 2. Usamos el modelo 'flux' que es más moderno
-        const prompt = `Artistic wallpaper of ${currentEmotion}, ${text.slice(0, 40)}, cinematic lighting, abstract art, high quality`;
-        const encodedPrompt = encodeURIComponent(prompt);
-        
-        // Enlace directo optimizado
-        imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&seed=${seed}&nologo=true&model=flux`; 
+    // PALABRAS CLAVE REFINADAS (Para evitar fotos raras)
+    // Seleccionamos temas muy estéticos: naturaleza, texturas, clima.
+    let keywords = '';
+    
+    switch (currentEmotion) {
+        case 'ira':
+            keywords = 'fire,storm,volcano,red_texture,abstract_red'; 
+            break;
+        case 'tristeza':
+            keywords = 'rain_window,fog,mist,ocean_storm,grey_sky,lonely_tree';
+            break;
+        case 'amor':
+            keywords = 'flowers,sunset,roses,pink_sky,romantic_paris,heart_bokeh';
+            break;
+        default: // neutral
+            keywords = 'minimalist,white_texture,calm_sea,notebook,coffee,zen';
+            break;
     }
 
+    // Usamos LoremFlickr en HD (1280x720) - Es muy rápido y fiable
+    const imageUrl = `https://loremflickr.com/1280/720/${keywords}?lock=${seed}`;
+    
+    // Precarga de imagen
     const img = new Image();
     img.src = imageUrl;
     
-    // Si carga bien:
     img.onload = () => {
         setAiBackgroundImage(imageUrl);
         setIsGenerating(false);
     };
 
-    // Si falla (Error de IA):
     img.onerror = () => {
-        console.error("Falló la carga principal");
-        // Plan B: Si la IA falla, forzamos una FOTO REAL inmediata
-        if (!useRealPhoto) {
-            // alert("La IA está ocupada. Usando fotografía artística alternativa...");
-            const keywords = currentEmotion;
-            const fallbackUrl = `https://loremflickr.com/1280/720/${keywords}?lock=${Date.now()}`;
-            setAiBackgroundImage(fallbackUrl);
-        } else {
-             alert("Error de conexión. Intenta de nuevo.");
-        }
+        console.error("Error cargando foto");
+        alert("Hubo un problema de conexión con el banco de imágenes.");
         setIsGenerating(false);
     };
   };
@@ -223,13 +217,13 @@ function App() {
       {/* 1. ZONA VISIBLE (Editor) */}
       <div ref={captureRef} className="absolute inset-0 w-full h-full">
         
-        {/* FONDO INTELIGENTE (IA o Color) */}
+        {/* FONDO INTELIGENTE (FOTO) */}
         {aiBackgroundImage ? (
             <div 
                 className="absolute inset-0 transition-all duration-1000 ease-in-out bg-cover bg-center"
                 style={{ backgroundImage: `url(${aiBackgroundImage})` }}
             >
-                <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
             </div>
         ) : (
             <div 
@@ -257,7 +251,8 @@ function App() {
       >
          {aiBackgroundImage ? (
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${aiBackgroundImage})` }}>
-                 <div className="absolute inset-0 bg-black/40"></div>
+                 {/* Capa oscura un poco más fuerte en la postal para que se lea bien el texto */}
+                 <div className="absolute inset-0 bg-black/50"></div>
             </div>
          ) : (
             <div className="absolute inset-0 state-mega-gradient" 
@@ -265,13 +260,15 @@ function App() {
             />
          )}
          
-         <div className="relative z-10 p-16 border-2 border-white/40 rounded-3xl backdrop-blur-sm bg-white/10 flex flex-col items-center justify-center h-full w-full">
-            <h2 className="text-6xl font-serif text-white mb-12 drop-shadow-lg">CromaVerso</h2>
-            <div className="text-4xl text-white font-serif leading-relaxed italic max-h-[800px] overflow-hidden text-ellipsis px-8 drop-shadow-md">
+         <div className="relative z-10 p-16 border-2 border-white/30 rounded-3xl backdrop-blur-sm bg-white/5 flex flex-col items-center justify-center h-full w-full">
+            <h2 className="text-6xl font-serif text-white mb-12 drop-shadow-xl">CromaVerso</h2>
+            <div className="text-4xl text-white font-serif leading-relaxed italic max-h-[800px] overflow-hidden text-ellipsis px-8 drop-shadow-lg">
                 "{text.length > 400 ? text.slice(0, 400) + '...' : text}"
             </div>
-            <div className="mt-12 text-2xl text-white/80 font-medium tracking-widest uppercase">
-                — {currentEmotion} —
+            <div className="mt-12 text-2xl text-white/90 font-medium tracking-widest uppercase flex items-center gap-3">
+                <span className="h-[1px] w-10 bg-white/60"></span>
+                {currentEmotion}
+                <span className="h-[1px] w-10 bg-white/60"></span>
             </div>
          </div>
       </div>
@@ -281,19 +278,19 @@ function App() {
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* BOTÓN MAGIA ✨ */}
+      {/* BOTÓN FOTO REAL (SIN IA) */}
       <button 
         onClick={aiBackgroundImage ? clearAiBackground : generateAiBackground}
         className={`fixed top-6 left-20 z-50 p-3 rounded-full backdrop-blur-md transition-all shadow-sm font-medium text-sm flex items-center gap-2 group ${
-            isGenerating ? 'bg-purple-200 animate-pulse cursor-wait' : 'bg-white/40 hover:bg-white/60 text-gray-700'
+            isGenerating ? 'bg-indigo-200 animate-pulse cursor-wait' : 'bg-white/40 hover:bg-white/60 text-gray-700'
         }`}
-        title="Generar fondo Mágico"
+        title="Cambiar fondo por Fotografía"
         disabled={isGenerating}
       >
-        {isGenerating ? '🔮 Creando...' : (aiBackgroundImage ? '❌ Quitar Fondo' : '✨ Magia')}
+        {isGenerating ? '📷 Buscando...' : (aiBackgroundImage ? '❌ Quitar Foto' : '📷 Fondo Real')}
       </button>
 
-      <button onClick={handleDownloadFull} className="fixed top-6 left-48 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento">
+      <button onClick={handleDownloadFull} className="fixed top-6 left-52 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento">
         <span>📄</span>
       </button>
 
