@@ -31,7 +31,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   
-  // NUEVO: Estado para guardar la imagen de la IA
+  // Estado para la IA
   const [aiBackgroundImage, setAiBackgroundImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -46,30 +46,32 @@ function App() {
 
   const currentEmotion = detectEmotion(text);
 
-  // --- NUEVA FUNCIÓN: GENERAR FONDO IA ---
+  // --- FUNCIÓN IA CORREGIDA (Con detector de errores) ---
   const generateAiBackground = () => {
-    if (!text.trim()) return alert("Escribe algo para que la IA se inspire.");
+    if (!text.trim()) return alert("Escribe algo primero para inspirar a la IA.");
     
     setIsGenerating(true);
     
-    // 1. Crear el Prompt (La instrucción para la IA)
-    // Combinamos la emoción + palabras clave artísticas
+    // Prompt optimizado
     const prompt = `Abstract artistic background representing ${currentEmotion}, ${text.slice(0, 50)}, ethereal, cinematic lighting, 4k, wallpaper style, no text`;
-    
-    // 2. Codificar para URL
     const encodedPrompt = encodeURIComponent(prompt);
-    
-    // 3. URL Mágica de Pollinations (Gratis)
-    // Usamos un número aleatorio (seed) para que siempre sea distinta
-    const seed = Math.floor(Math.random() * 1000);
+    const seed = Math.floor(Math.random() * 1000); // Semilla aleatoria
     const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1920&height=1080&seed=${seed}&nologo=true`;
 
-    // 4. Precargar la imagen antes de mostrarla
     const img = new Image();
     img.src = imageUrl;
+    
+    // 1. ÉXITO: La imagen cargó bien
     img.onload = () => {
         setAiBackgroundImage(imageUrl);
         setIsGenerating(false);
+    };
+
+    // 2. ERROR: Algo falló (internet, servidor, etc.)
+    img.onerror = () => {
+        console.error("Error cargando imagen de IA");
+        alert("La IA está tardando demasiado o falló la conexión. Intenta de nuevo.");
+        setIsGenerating(false); // ¡IMPORTANTE! Desbloqueamos el botón
     };
   };
 
@@ -117,7 +119,7 @@ function App() {
       const canvas = await html2canvas(captureRef.current, {
         scale: 2, 
         backgroundColor: null,
-        useCORS: true, // Importante para descargar imágenes externas (IA)
+        useCORS: true, 
         height: captureRef.current.scrollHeight + 50,
         windowHeight: captureRef.current.scrollHeight + 50,
         onclone: (clonedDoc) => {
@@ -151,7 +153,7 @@ function App() {
       const canvas = await html2canvas(postcardRef.current, {
         scale: 3, 
         backgroundColor: null, 
-        useCORS: true // Importante para la IA
+        useCORS: true 
       });
       const link = document.createElement('a');
       link.download = `CromaVerso-Postal-${currentEmotion}.png`;
@@ -193,17 +195,12 @@ function App() {
       {/* 1. ZONA VISIBLE (Editor) */}
       <div ref={captureRef} className="absolute inset-0 w-full h-full">
         
-        {/* FONDO: Si hay imagen de IA, mostramos esa. Si no, mostramos el degradado de colores */}
+        {/* FONDO INTELIGENTE */}
         {aiBackgroundImage ? (
             <div 
-                className="absolute inset-0 transition-all duration-1000 ease-in-out"
-                style={{ 
-                    backgroundImage: `url(${aiBackgroundImage})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                }}
+                className="absolute inset-0 transition-all duration-1000 ease-in-out bg-cover bg-center"
+                style={{ backgroundImage: `url(${aiBackgroundImage})` }}
             >
-                {/* Capa oscura para que se lea el texto sobre la imagen */}
                 <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
             </div>
         ) : (
@@ -224,15 +221,14 @@ function App() {
         </div>
       </div>
 
-      {/* 2. ZONA OCULTA (PLANTILLA PARA POSTAL ARTÍSTICA) */}
+      {/* 2. ZONA OCULTA (PLANTILLA POSTAL) */}
       <div 
         ref={postcardRef}
         className="fixed top-0 left-0 hidden flex-col items-center justify-center p-12 text-center"
         style={{ width: '1080px', height: '1350px', zIndex: -10 }}
       >
-         {/* Fondo Postal: Igual, soporta IA o Color */}
          {aiBackgroundImage ? (
-            <div className="absolute inset-0" style={{ backgroundImage: `url(${aiBackgroundImage})`, backgroundSize: 'cover' }}>
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${aiBackgroundImage})` }}>
                  <div className="absolute inset-0 bg-black/40"></div>
             </div>
          ) : (
@@ -252,13 +248,12 @@ function App() {
          </div>
       </div>
 
-
-      {/* --- CONTROLES UI --- */}
+      {/* --- BOTONES --- */}
       <button onClick={toggleAudio} className="fixed top-6 left-6 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2">
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* NUEVO BOTÓN: IA MAGIC ✨ */}
+      {/* BOTÓN IA MEJORADO */}
       <button 
         onClick={aiBackgroundImage ? clearAiBackground : generateAiBackground}
         className={`fixed top-6 left-20 z-50 p-3 rounded-full backdrop-blur-md transition-all shadow-sm font-medium text-sm flex items-center gap-2 group ${
@@ -270,11 +265,11 @@ function App() {
         {isGenerating ? '🔮 Creando...' : (aiBackgroundImage ? '❌ Quitar IA' : '✨ IA Magic')}
       </button>
 
-      <button onClick={handleDownloadFull} className="fixed top-6 left-48 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento Completo">
+      <button onClick={handleDownloadFull} className="fixed top-6 left-48 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento">
         <span>📄</span>
       </button>
 
-      <button onClick={handleDownloadPostcard} className="fixed top-6 left-64 z-50 p-3 rounded-full bg-indigo-100/80 backdrop-blur-md hover:bg-indigo-200 transition-all shadow-sm text-indigo-900 font-medium text-sm flex items-center gap-2 group" title="Crear Postal Artística">
+      <button onClick={handleDownloadPostcard} className="fixed top-6 left-64 z-50 p-3 rounded-full bg-indigo-100/80 backdrop-blur-md hover:bg-indigo-200 transition-all shadow-sm text-indigo-900 font-medium text-sm flex items-center gap-2 group" title="Crear Postal">
         <span className="group-hover:scale-110 transition-transform">🎨 Postal</span>
       </button>
 
