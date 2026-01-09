@@ -1,233 +1,271 @@
-import { useState } from 'react';
-import type { SavedWriting } from '../App'; // Importamos el tipo si es necesario, o lo redefinimos aquí
-
-// Re-definición simple para evitar errores de importación si TS se queja
-interface WritingItem {
-  id: string;
-  title: string;
-  content: string;
-  date: string;
-  emotion: string;
-}
-
-const synonymDatabase: any = {
-  ira: {
-    directos: ['Enojo', 'Furia', 'Cólera', 'Rabia', 'Irritación', 'Indignación'],
-    poeticos: ['Fuego en las venas', 'Tormenta ciega', 'Hiel', 'Volcán dormido', 'Ceniza ardiente']
-  },
-  tristeza: {
-    directos: ['Pena', 'Melancolía', 'Depresión', 'Abatimiento', 'Pesar', 'Desconsuelo'],
-    poeticos: ['Gris eterno', 'Invierno del alma', 'Lluvia silenciosa', 'Naufragio', 'Eco vacío']
-  },
-  amor: {
-    directos: ['Cariño', 'Afecto', 'Pasión', 'Ternura', 'Adoración', 'Devoción'],
-    poeticos: ['Luz de mañana', 'Refugio', 'Latido compartido', 'Dulce abismo', 'Sol de mis días']
-  },
-  neutral: {
-    directos: ['Calma', 'Quietud', 'Silencio', 'Paz', 'Equilibrio'],
-    poeticos: ['Lienzo en blanco', 'Susurro del viento', 'Aguas quietas', 'Espera sutil']
-  }
-};
+import React, { useState } from 'react';
+import { BookOpen, Sparkles, X, Save, Trash2, FileText, Copy } from 'lucide-react';
+import { SavedWriting } from '../App';
 
 interface SidebarProps {
   isOpen: boolean;
-  setIsOpen: (isOpen: boolean) => void;
+  setIsOpen: (v: boolean) => void;
   text: string;
-  setText: (text: string) => void;
+  setText: (v: string) => void;
   currentEmotion: string;
-  // NUEVAS PROPS PARA BIBLIOTECA
   onSave: () => void;
-  savedWritings: WritingItem[];
-  onLoad: (writing: WritingItem) => void;
+  savedWritings: SavedWriting[];
+  onLoad: (w: SavedWriting) => void;
   onDelete: (id: string) => void;
 }
 
-function Sidebar({ isOpen, setIsOpen, text, setText, currentEmotion, onSave, savedWritings, onLoad, onDelete }: SidebarProps) {
-  const [suggestions, setSuggestions] = useState<{directos: string[], poeticos: string[]} | null>(null);
-  const [metaphor, setMetaphor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  
-  // Ahora tenemos 3 pestañas: Sinónimos, Metáfora, y Biblioteca
-  const [activeTab, setActiveTab] = useState<'synonyms' | 'metaphor' | 'library' | null>(null);
+// --- BASE DE DATOS DE INSPIRACIÓN (TESAURO) ---
+const emotionalThesaurus: Record<string, string[]> = {
+  ira: [
+    "Furia", "Cólera", "Rabia", "Indignación", "Arrebato", "Frenesí", 
+    "Rencor", "Hostilidad", "Violencia", "Ardor", "Hiel", "Virulencia",
+    "Estallido", "Bilis", "Encono", "Exasperación", "Impetu", "Irascibilidad"
+  ],
+  tristeza: [
+    "Melancolía", "Pesadumbre", "Desolación", "Congoja", "Nostalgia", 
+    "Abatimiento", "Languidez", "Aflicción", "Duelo", "Quebranto", 
+    "Taciturno", "Sombrio", "Desamparo", "Vacío", "Pena", "Luto"
+  ],
+  amor: [
+    "Pasión", "Ternura", "Devoción", "Embeleso", "Fascinación", 
+    "Idilio", "Romance", "Afecto", "Cariño", "Adoración", 
+    "Fervor", "Apego", "Encanto", "Dulzura", "Estima", "Querer"
+  ],
+  neutral: [
+    "Calma", "Equilibrio", "Serenidad", "Paz", "Sosiego", 
+    "Armonía", "Quietud", "Claridad", "Reflexión", "Contemplación",
+    "Estabilidad", "Mesura", "Temple", "Plenitud", "Silencio"
+  ]
+};
 
-  const handleSynonyms = () => {
-    setActiveTab('synonyms');
-    setLoading(true);
-    setSuggestions(null); 
-    setTimeout(() => {
-      const key = currentEmotion || 'neutral';
-      const data = synonymDatabase[key] || synonymDatabase['neutral'];
-      setSuggestions(data);
-      setLoading(false);
-    }, 600);
+// --- BASE DE DATOS DE METÁFORAS (CHISPAZOS CREATIVOS) ---
+// Frases incompletas o evocadoras para desbloquear al escritor
+const metaphorSparks: Record<string, string[]> = {
+  ira: [
+    "Era un volcán dormido bajo la piel...",
+    "Sabía a hierro y ceniza en la boca...",
+    "Como un cristal rompiéndose en la garganta...",
+    "El fuego no quemaba, solo consumía el aire...",
+    "Un grito ahogado que rasgaba el silencio...",
+    "La sangre golpeaba como un martillo en las sienes..."
+  ],
+  tristeza: [
+    "Como un océano sin orillas ni fondo...",
+    "Una lluvia invisible que mojaba el alma...",
+    "El eco de un nombre en una casa vacía...",
+    "Pesaba como una piedra en el fondo del río...",
+    "Un invierno que se instaló en el pecho...",
+    "Caminar sobre vidrios con los pies descalzos..."
+  ],
+  amor: [
+    "Como si la gravedad hubiera dejado de existir...",
+    "Un incendio suave que no quema, pero ilumina...",
+    "El mapa de sus manos era mi único destino...",
+    "Florecer en medio de la nieve...",
+    "El tiempo se detuvo en sus pestañas...",
+    "Como encontrar agua en el desierto..."
+  ],
+  neutral: [
+    "El susurro del viento entre las hojas secas...",
+    "Un lago en calma reflejando el cielo...",
+    "El paso lento de las horas en la tarde...",
+    "Como una hoja en blanco esperando tinta...",
+    "El silencio era un huésped amable...",
+    "Respirar el aire frío de la mañana..."
+  ]
+};
+
+const Sidebar: React.FC<SidebarProps> = ({ 
+  isOpen, setIsOpen, text, setText, currentEmotion, 
+  onSave, savedWritings, onLoad, onDelete 
+}) => {
+  const [activeTab, setActiveTab] = useState<'thesaurus' | 'metaphor' | 'library'>('library');
+  const [generatedMetaphor, setGeneratedMetaphor] = useState<string | null>(null);
+
+  // Función para insertar texto en el editor
+  const handleInsertText = (textToInsert: string) => {
+    setText(text + " " + textToInsert);
   };
 
-  const handleMetaphor = () => {
-    setActiveTab('metaphor');
-    setLoading(true);
-    setMetaphor(null);
-    setTimeout(() => {
-      const metaphors: any = {
-        ira: "'Tu silencio fue la chispa que incendió mi bosque de calma.'",
-        tristeza: "'Llevo tu ausencia como un abrigo de plomo en verano.'",
-        amor: "'Eres la coma que le da sentido a mi párrafo desordenado.'",
-        neutral: "'El tiempo pasaba lento, como miel cayendo de una cuchara.'"
-      };
-      setMetaphor(metaphors[currentEmotion] || metaphors['neutral']);
-      setLoading(false);
-    }, 800);
-  };
-
-  const handleLibrary = () => {
-    setActiveTab('library');
-  };
-
-  // Función para obtener un emoji según la emoción guardada
-  const getEmotionEmoji = (emotion: string) => {
-    switch(emotion) {
-      case 'ira': return '🔴';
-      case 'tristeza': return '🔵';
-      case 'amor': return '🩷';
-      default: return '⚪';
-    }
+  // Función para generar una metáfora nueva
+  const generateNewMetaphor = () => {
+    const list = metaphorSparks[currentEmotion] || metaphorSparks['neutral'];
+    const random = list[Math.floor(Math.random() * list.length)];
+    setGeneratedMetaphor(random);
   };
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`fixed top-6 right-6 z-[60] p-3 rounded-full backdrop-blur-md transition-all duration-300 shadow-lg ${
-          isOpen ? 'bg-white/80 text-gray-800' : 'bg-white/40 text-gray-800 hover:bg-white/60'
+      {/* --- BOTÓN FLOTANTE PARA ABRIR --- */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed top-6 right-6 z-50 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:scale-110 transition-transform text-gray-800"
+        >
+          <BookOpen size={20} />
+        </button>
+      )}
+
+      {/* --- SIDEBAR --- */}
+      <div 
+        className={`fixed top-0 right-0 h-full w-80 md:w-96 bg-white/90 backdrop-blur-xl shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        {isOpen ? '✕' : '☰'}
-      </button>
-
-      <div
-        className={`fixed top-0 right-0 h-full w-96 bg-white/80 backdrop-blur-2xl border-l border-white/50 shadow-2xl z-[50] transition-transform duration-500 ease-in-out transform ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        } overflow-y-auto`}
-      >
-        <div className="p-8 mt-16 flex flex-col h-full">
-          <h2 className="text-3xl font-serif text-gray-800 mb-2">Musa IA</h2>
-          <p className="text-sm text-gray-500 mb-6">
-            Tono actual: <span className="font-bold capitalize text-indigo-600">{currentEmotion}</span>
-          </p>
-
-          {/* BOTÓN GUARDAR GRANDE */}
-          <button
-            onClick={onSave}
-            className="w-full mb-6 py-3 bg-gray-900 text-white rounded-xl shadow-lg hover:bg-gray-800 transition-all font-medium flex items-center justify-center gap-2"
-          >
-            💾 Guardar Progreso Actual
-          </button>
-          
-          <div className="space-y-3 shrink-0">
-            <div className="grid grid-cols-2 gap-2">
-                <button
-                onClick={handleSynonyms}
-                className={`p-3 rounded-xl transition-all text-center text-sm font-medium border ${
-                    activeTab === 'synonyms' ? 'bg-gray-800 text-white' : 'bg-white/50 hover:bg-white/80'
-                }`}
-                >
-                📖 Tesauro
-                </button>
-                <button
-                onClick={handleMetaphor}
-                className={`p-3 rounded-xl transition-all text-center text-sm font-medium border ${
-                    activeTab === 'metaphor' ? 'bg-gray-800 text-white' : 'bg-white/50 hover:bg-white/80'
-                }`}
-                >
-                ✨ Metáfora
-                </button>
-            </div>
-            
-            <button
-              onClick={handleLibrary}
-              className={`w-full p-3 rounded-xl transition-all text-left font-medium border flex items-center justify-between ${
-                activeTab === 'library' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white/50 text-gray-800 hover:bg-white/80'
-              }`}
-            >
-              <span>📚 Mi Biblioteca</span>
-              <span className="bg-white/20 px-2 py-0.5 rounded text-xs">{savedWritings.length}</span>
-            </button>
+        {/* CABECERA */}
+        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-serif text-gray-800">Musa IA</h2>
+            <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">
+              Tono actual: <span className={`font-bold ${
+                currentEmotion === 'ira' ? 'text-red-500' :
+                currentEmotion === 'tristeza' ? 'text-blue-500' :
+                currentEmotion === 'amor' ? 'text-pink-500' : 'text-gray-500'
+              }`}>{currentEmotion}</span>
+            </p>
           </div>
+          <button 
+            onClick={() => setIsOpen(false)}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <X size={20} className="text-gray-500" />
+          </button>
+        </div>
 
-          <div className="mt-8 flex-1">
-            {loading && (
-              <div className="flex items-center justify-center h-20 space-x-2 animate-pulse">
-                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-              </div>
-            )}
+        {/* NAVEGACIÓN (TABS) */}
+        <div className="flex p-2 gap-2 bg-gray-50/50">
+          <button 
+            onClick={() => setActiveTab('library')}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'library' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
+          >
+            📚 Biblioteca
+          </button>
+          <button 
+            onClick={() => setActiveTab('thesaurus')}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'thesaurus' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
+          >
+            📖 Tesauro
+          </button>
+          <button 
+            onClick={() => setActiveTab('metaphor')}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'metaphor' ? 'bg-white shadow-sm text-amber-600' : 'text-gray-500 hover:bg-gray-100'}`}
+          >
+            ✨ Metáfora
+          </button>
+        </div>
 
-            {/* SECCIÓN DE BIBLIOTECA */}
-            {activeTab === 'library' && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* CONTENIDO SCROLLABLE */}
+        <div className="flex-1 overflow-y-auto p-6">
+          
+          {/* --- TAB: BIBLIOTECA --- */}
+          {activeTab === 'library' && (
+            <div className="space-y-4">
+              <button 
+                onClick={onSave}
+                className="w-full py-3 bg-gray-900 text-white rounded-xl shadow-md hover:bg-black transition-all flex items-center justify-center gap-2 font-medium"
+              >
+                <Save size={18} /> Guardar Progreso
+              </button>
+              
+              <div className="mt-6">
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Tus Escritos</h3>
                 {savedWritings.length === 0 ? (
-                  <p className="text-center text-gray-500 italic mt-10">Tu biblioteca está vacía.</p>
+                  <div className="text-center py-10 text-gray-400 italic">
+                    No hay escritos guardados aún.
+                  </div>
                 ) : (
-                  savedWritings.map((writing) => (
-                    <div key={writing.id} className="bg-white/60 p-4 rounded-xl border border-white/50 shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex justify-between items-start mb-2">
-                            <h3 className="font-serif font-bold text-gray-800">{writing.title}</h3>
-                            <span title={`Emoción: ${writing.emotion}`}>{getEmotionEmoji(writing.emotion)}</span>
+                  <div className="space-y-3">
+                    {savedWritings.map((w) => (
+                      <div key={w.id} className="group p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all flex justify-between items-start">
+                        <div onClick={() => onLoad(w)} className="cursor-pointer flex-1">
+                          <h4 className="font-serif text-gray-800 font-medium group-hover:text-indigo-600 transition-colors">{w.title}</h4>
+                          <p className="text-xs text-gray-400 mt-1">{w.date} • {w.emotion}</p>
                         </div>
-                        <p className="text-xs text-gray-500 mb-3">{writing.date} • {writing.content.slice(0, 30)}...</p>
-                        
-                        <div className="flex gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                            <button 
-                                onClick={() => onLoad(writing)}
-                                className="flex-1 bg-indigo-100 text-indigo-700 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-200"
-                            >
-                                Cargar
-                            </button>
-                            <button 
-                                onClick={() => onDelete(writing.id)}
-                                className="px-3 bg-red-100 text-red-600 py-1.5 rounded-lg text-xs font-bold hover:bg-red-200"
-                            >
-                                🗑️
-                            </button>
-                        </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* (Aquí siguen las secciones de Sinónimos y Metáforas del código anterior, se mantienen igual si copias todo este bloque) */}
-            {suggestions && activeTab === 'synonyms' && !loading && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white/40 p-5 rounded-2xl border border-white/50">
-                  <h3 className="text-xs font-bold tracking-wider text-gray-500 uppercase mb-3">Funcionales</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestions.directos.map((word:string, i:number) => (
-                      <span key={i} className="px-3 py-1 bg-white/60 rounded-lg text-sm text-gray-700 border border-white/40 cursor-pointer hover:bg-white hover:shadow-sm transition-all">{word}</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onDelete(w.id); }}
+                          className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     ))}
                   </div>
-                </div>
-                <div className="bg-gradient-to-br from-indigo-50/50 to-purple-50/50 p-5 rounded-2xl border border-indigo-100/50">
-                  <h3 className="text-xs font-bold tracking-wider text-indigo-400 uppercase mb-3">Poéticos</h3>
-                  <ul className="space-y-3">
-                    {suggestions.poeticos.map((phrase:string, i:number) => (
-                      <li key={i} className="flex items-start text-gray-700 text-sm italic"><span className="mr-2 text-indigo-300">✦</span>{phrase}</li>
-                    ))}
-                  </ul>
-                </div>
+                )}
               </div>
-            )}
+            </div>
+          )}
 
-            {metaphor && activeTab === 'metaphor' && !loading && (
-              <div className="mt-4 p-6 rounded-2xl bg-white/40 border border-white/50 text-gray-800 text-lg font-serif italic leading-relaxed shadow-sm animate-in zoom-in-95 duration-500">
-                {metaphor}
+          {/* --- TAB: TESAURO CONTEXTUAL --- */}
+          {activeTab === 'thesaurus' && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl mb-6">
+                <p className="text-sm text-indigo-800 leading-relaxed">
+                  Aquí tienes palabras de alto impacto relacionadas con tu emoción actual: <strong>{currentEmotion}</strong>.
+                </p>
               </div>
-            )}
-          </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {(emotionalThesaurus[currentEmotion] || emotionalThesaurus['neutral']).map((word, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleInsertText(word)}
+                    className="p-3 text-left bg-white border border-gray-100 rounded-lg hover:border-indigo-300 hover:shadow-sm hover:text-indigo-700 transition-all text-gray-600 text-sm font-medium flex justify-between group"
+                    title="Clic para insertar"
+                  >
+                    {word}
+                    <Copy size={14} className="opacity-0 group-hover:opacity-100 text-indigo-400" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* --- TAB: METÁFORAS (CHISPAZOS) --- */}
+          {activeTab === 'metaphor' && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col h-full">
+              <div className="text-center mb-8">
+                <div className="inline-block p-4 bg-amber-100 text-amber-600 rounded-full mb-4">
+                  <Sparkles size={32} />
+                </div>
+                <h3 className="text-lg font-serif text-gray-800">Desbloqueo Creativo</h3>
+                <p className="text-sm text-gray-500 mt-2 px-4">
+                  Genera una frase inicial basada en {currentEmotion} y termina la historia tú mismo.
+                </p>
+              </div>
+
+              {/* TARJETA DE METÁFORA */}
+              {generatedMetaphor ? (
+                <div className="p-6 bg-white border-2 border-amber-100 rounded-2xl shadow-sm relative group">
+                   <p className="font-serif text-xl text-gray-700 italic leading-relaxed">
+                     "{generatedMetaphor}"
+                   </p>
+                   <button 
+                    onClick={() => handleInsertText(generatedMetaphor)}
+                    className="mt-4 text-xs font-bold text-amber-600 uppercase tracking-widest hover:text-amber-800 flex items-center gap-2"
+                   >
+                     <Copy size={14} /> Insertar en texto
+                   </button>
+                </div>
+              ) : (
+                <div className="p-10 border-2 border-dashed border-gray-200 rounded-2xl flex items-center justify-center text-gray-400 text-sm">
+                  Dale al botón para inspirarte
+                </div>
+              )}
+
+              <button
+                onClick={generateNewMetaphor}
+                className="mt-8 w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all font-medium flex items-center justify-center gap-2"
+              >
+                <Sparkles size={18} />
+                Generar Nueva Idea
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
     </>
   );
-}
+};
 
 export default Sidebar;
