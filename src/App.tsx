@@ -3,6 +3,7 @@ import html2canvas from 'html2canvas';
 import TextEditor from './components/TextEditor';
 import Sidebar from './components/Sidebar';
 
+// TIPOS
 export interface SavedWriting {
   id: string;
   title: string;
@@ -11,6 +12,7 @@ export interface SavedWriting {
   emotion: string;
 }
 
+// 1. DICCIONARIO EMOCIONAL
 const detectEmotion = (text: string) => {
   const recentText = text.slice(-60).toLowerCase(); 
   if (recentText.match(/ira|furia|odio|rabia|fuego|sangre|grito|ardor|guerra|golpe|infierno|maldit|quemar|destruir|matar|enemigo|colera|volcán|ceniza/)) return 'ira';
@@ -19,6 +21,7 @@ const detectEmotion = (text: string) => {
   return 'neutral';
 };
 
+// 2. AUDIOS
 const audioTracks = {
   neutral: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
   ira: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3',
@@ -31,7 +34,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   
-  // Estado para la IA
+  // Estado para la IA / Fondo
   const [aiBackgroundImage, setAiBackgroundImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -46,32 +49,57 @@ function App() {
 
   const currentEmotion = detectEmotion(text);
 
-  // --- FUNCIÓN IA CORREGIDA (Con detector de errores) ---
+  // --- FUNCIÓN INTELIGENTE (IA RÁPIDA + FOTOS) ---
   const generateAiBackground = () => {
-    if (!text.trim()) return alert("Escribe algo primero para inspirar a la IA.");
+    if (!text.trim()) return alert("Escribe algo para inspirar el fondo.");
     
     setIsGenerating(true);
     
-    // Prompt optimizado
-    const prompt = `Abstract artistic background representing ${currentEmotion}, ${text.slice(0, 50)}, ethereal, cinematic lighting, 4k, wallpaper style, no text`;
-    const encodedPrompt = encodeURIComponent(prompt);
-    const seed = Math.floor(Math.random() * 1000); // Semilla aleatoria
-    const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1920&height=1080&seed=${seed}&nologo=true`;
+    // A veces usamos IA (80%), a veces fotos reales (20%) para variar y ser rápidos
+    const useRealPhoto = Math.random() > 0.8; 
+
+    let imageUrl = '';
+    const seed = Math.floor(Math.random() * 10000);
+
+    if (useRealPhoto) {
+        // MODO FOTO REAL (Instantáneo)
+        const keywords = currentEmotion === 'neutral' ? 'nature,calm' : 
+                         currentEmotion === 'ira' ? 'fire,storm,abstract' :
+                         currentEmotion === 'tristeza' ? 'rain,fog,melancholy' : 'flowers,sky,love';
+        imageUrl = `https://loremflickr.com/1280/720/${keywords}?lock=${seed}`;
+    } else {
+        // MODO IA OPTIMIZADA (Más rápida)
+        // 1. Usamos 1280x720 en vez de 1920x1080 (Mitad de tiempo de carga)
+        // 2. Usamos el modelo 'flux' que es más moderno
+        const prompt = `Artistic wallpaper of ${currentEmotion}, ${text.slice(0, 40)}, cinematic lighting, abstract art, high quality`;
+        const encodedPrompt = encodeURIComponent(prompt);
+        
+        // Enlace directo optimizado
+        imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&seed=${seed}&nologo=true&model=flux`; 
+    }
 
     const img = new Image();
     img.src = imageUrl;
     
-    // 1. ÉXITO: La imagen cargó bien
+    // Si carga bien:
     img.onload = () => {
         setAiBackgroundImage(imageUrl);
         setIsGenerating(false);
     };
 
-    // 2. ERROR: Algo falló (internet, servidor, etc.)
+    // Si falla (Error de IA):
     img.onerror = () => {
-        console.error("Error cargando imagen de IA");
-        alert("La IA está tardando demasiado o falló la conexión. Intenta de nuevo.");
-        setIsGenerating(false); // ¡IMPORTANTE! Desbloqueamos el botón
+        console.error("Falló la carga principal");
+        // Plan B: Si la IA falla, forzamos una FOTO REAL inmediata
+        if (!useRealPhoto) {
+            // alert("La IA está ocupada. Usando fotografía artística alternativa...");
+            const keywords = currentEmotion;
+            const fallbackUrl = `https://loremflickr.com/1280/720/${keywords}?lock=${Date.now()}`;
+            setAiBackgroundImage(fallbackUrl);
+        } else {
+             alert("Error de conexión. Intenta de nuevo.");
+        }
+        setIsGenerating(false);
     };
   };
 
@@ -195,7 +223,7 @@ function App() {
       {/* 1. ZONA VISIBLE (Editor) */}
       <div ref={captureRef} className="absolute inset-0 w-full h-full">
         
-        {/* FONDO INTELIGENTE */}
+        {/* FONDO INTELIGENTE (IA o Color) */}
         {aiBackgroundImage ? (
             <div 
                 className="absolute inset-0 transition-all duration-1000 ease-in-out bg-cover bg-center"
@@ -253,16 +281,16 @@ function App() {
         {isMuted ? '🔇' : '🔊'}
       </button>
 
-      {/* BOTÓN IA MEJORADO */}
+      {/* BOTÓN MAGIA ✨ */}
       <button 
         onClick={aiBackgroundImage ? clearAiBackground : generateAiBackground}
         className={`fixed top-6 left-20 z-50 p-3 rounded-full backdrop-blur-md transition-all shadow-sm font-medium text-sm flex items-center gap-2 group ${
             isGenerating ? 'bg-purple-200 animate-pulse cursor-wait' : 'bg-white/40 hover:bg-white/60 text-gray-700'
         }`}
-        title="Generar fondo con IA"
+        title="Generar fondo Mágico"
         disabled={isGenerating}
       >
-        {isGenerating ? '🔮 Creando...' : (aiBackgroundImage ? '❌ Quitar IA' : '✨ IA Magic')}
+        {isGenerating ? '🔮 Creando...' : (aiBackgroundImage ? '❌ Quitar Fondo' : '✨ Magia')}
       </button>
 
       <button onClick={handleDownloadFull} className="fixed top-6 left-48 z-50 p-3 rounded-full bg-white/40 backdrop-blur-md hover:bg-white/60 transition-all shadow-sm text-gray-700 font-medium text-sm flex items-center gap-2 group" title="Guardar Documento">
